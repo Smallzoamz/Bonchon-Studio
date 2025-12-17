@@ -28,6 +28,22 @@ if "%tag%"=="" (
     exit /b
 )
 
+:: Auto-format tag: Ensure 'v' prefix for git, but extract raw version for package.json
+set "version_num=%tag%"
+if "%version_num:~0,1%"=="v" (
+    set "version_num=%version_num:~1%"
+) else (
+    set "tag=v%tag%"
+)
+
+echo Updating package.json to version %version_num%...
+powershell -NoProfile -Command "$j = Get-Content package.json | ConvertFrom-Json; $j.version = '%version_num%'; $j | ConvertTo-Json | Set-Content package.json -Encoding UTF8"
+if %errorlevel% neq 0 (
+    echo Failed to update package.json version.
+    pause
+    exit /b
+)
+
 echo.
 echo ====================================================
 echo SUMMARY:
