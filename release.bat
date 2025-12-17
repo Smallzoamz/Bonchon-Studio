@@ -55,6 +55,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [2/4] Pushing to main branch...
+git pull --rebase origin main
 git push origin main
 if %errorlevel% neq 0 (
     echo Push to main failed.
@@ -64,12 +65,12 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [3/4] Managing Tag %tag%...
-:: Delete local tag if exists
+rem Delete local tag if exists
 git tag -d %tag% 2>nul
-:: Delete remote tag
+rem Delete remote tag
 git push origin :%tag% 2>nul
 
-:: Create and push new tag
+rem Create and push new tag
 git tag %tag%
 git push origin %tag%
 if %errorlevel% neq 0 (
@@ -88,6 +89,7 @@ if exist "%catalog_repo%" (
     pushd "%catalog_repo%"
     git add app-catalog.json
     git commit -m "Update catalog: %msg%"
+    git pull --rebase origin main
     git push origin main
     popd
     echo Catalog sync complete!
