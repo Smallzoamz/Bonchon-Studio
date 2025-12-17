@@ -37,7 +37,7 @@ if "%version_num:~0,1%"=="v" (
 )
 
 echo Updating package.json to version %version_num%...
-powershell -NoProfile -Command "$j = Get-Content package.json | ConvertFrom-Json; $j.version = '%version_num%'; $j | ConvertTo-Json | Set-Content package.json -Encoding UTF8"
+powershell -NoProfile -Command "$p = Join-Path (Get-Location) 'package.json'; $j = Get-Content $p -Raw | ConvertFrom-Json; $j.version = '%version_num%'; [System.IO.File]::WriteAllText($p, ($j | ConvertTo-Json))"
 if %errorlevel% neq 0 (
     echo Failed to update package.json version.
     pause
