@@ -340,17 +340,14 @@ function createAppCard(app, isInstalled, context) {
     card.className = 'app-card';
     card.dataset.appId = app.id;
 
-    // Use inline SVG as placeholder icon
-    const placeholderSvg = `<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="80" height="80" rx="16" fill="#1a1a24"/>
-        <path d="M40 20C29 20 20 29 20 40C20 51 29 60 40 60C51 60 60 51 60 40C60 29 51 20 40 20ZM40 55C31.7 55 25 48.3 25 40C25 31.7 31.7 25 40 25C48.3 25 55 31.7 55 40C55 48.3 48.3 55 40 55Z" fill="#00d4ff"/>
-        <circle cx="40" cy="40" r="8" fill="#00d4ff"/>
-    </svg>`;
+    // Use app icon if available, otherwise use Bonchon Studio logo
+    const iconUrl = app.icon || app.iconUrl || '../assets/icons/logo.png';
+    const iconElement = `<img src="${iconUrl}" alt="${app.name}" style="width: 80px; height: 80px; object-fit: contain; border-radius: 16px;" onerror="this.src='../assets/icons/logo.png'">`;
 
     card.innerHTML = `
         <div class="app-card-image">
             <div class="app-icon-wrapper">
-                ${placeholderSvg}
+                ${iconElement}
             </div>
         </div>
         <div class="app-card-content">
