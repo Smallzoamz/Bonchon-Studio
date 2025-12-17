@@ -50,7 +50,7 @@ git add -A
 git commit -m "%msg%"
 if %errorlevel% neq 0 (
     echo Commit failed. Check if there are changes to commit.
-    :: Continue anyway as there might be no changes but the user wants to push/tag
+    rem Continue anyway as there might be no changes but the user wants to push/tag
 )
 
 echo.
