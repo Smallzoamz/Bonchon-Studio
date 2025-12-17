@@ -1,0 +1,40 @@
+{
+  "name": "bonchon-launcher",
+  "version": "1.0.0",
+  "description": "Bonchon Studio Application Launcher",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win"
+  },
+  "author": "Bonchon Studio",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.bonchon.launcher",
+    "productName": "Bonchon Launcher",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icons/icon.ico",
+      "uninstallerIcon": "assets/icons/icon.ico"
+    }
+  },
+  "dependencies": {
+    "electron-dl": "^4.0.0",
+    "electron-updater": "^6.6.2",
+    "extract-zip": "^2.0.1"
+  }
+}

@@ -1,0 +1,32 @@
+[
+    {
+        "id": "fivem-launcher",
+        "name": "FiveM Launcher",
+        "description": "Custom launcher สำหรับ FiveM พร้อมระบบเลือก Pure Mode ที่สะดวกและรวดเร็ว",
+        "icon": "fivem-launcher.png",
+        "version": "1.0.0",
+        "downloadUrl": "",
+        "size": "45 MB",
+        "category": "Gaming"
+    },
+    {
+        "id": "medic-recruitment",
+        "name": "Medic Recruitment",
+        "description": "ระบบจัดการการรับสมัครและติดตามสถานะ Medic แบบ Real-time",
+        "icon": "medic-recruitment.png",
+        "version": "1.2.0",
+        "downloadUrl": "",
+        "size": "82 MB",
+        "category": "Management"
+    },
+    {
+        "id": "bonchon-tools",
+        "name": "Bonchon Tools",
+        "description": "ชุดเครื่องมือสำหรับนักพัฒนาจาก Bonchon Studio",
+        "icon": "bonchon-tools.png",
+        "version": "1.0.0",
+        "downloadUrl": "",
+        "size": "25 MB",
+        "category": "Development"
+    }
+]
