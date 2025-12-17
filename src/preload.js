@@ -50,6 +50,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // App catalog
     fetchAppCatalog: (url) => ipcRenderer.invoke('fetch-app-catalog', url),
 
+    // GitHub releases API
+    fetchGitHubRelease: (options) => ipcRenderer.invoke('fetch-github-release', options),
+
     // Launcher updates
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     onUpdateAvailable: (callback) => {

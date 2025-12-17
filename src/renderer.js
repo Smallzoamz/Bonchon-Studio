@@ -1,3 +1,4 @@
+
 // ========================================
 // BONCHON LAUNCHER - RENDERER
 // ========================================
@@ -17,6 +18,7 @@ const fallbackAppsData = [
         icon: "../assets/icons/logo.png",
         version: "1.0.0",
         downloadUrl: "",
+        githubRepo: "Smallzoamz/FiveMLauncher",
         size: "45 MB",
         category: "Gaming",
         bgColor: "linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff4500 100%)"
@@ -26,8 +28,9 @@ const fallbackAppsData = [
         name: "Medic OP Systems",
         description: "ระบบจัดการ OP และติดตามสถานะ Medic แบบ Real-time",
         icon: "../assets/icons/logo.png",
-        version: "1.2.0",
+        version: "1.0.0",
         downloadUrl: "",
+        githubRepo: "Smallzoamz/medicop",
         size: "82 MB",
         category: "Management",
         bgColor: "linear-gradient(135deg, #00d4ff 0%, #0099cc 50%, #006699 100%)"
@@ -92,11 +95,38 @@ async function checkForAppUpdates() {
 
     for (const installed of installedApps) {
         const catalogApp = appsData.find(a => a.id === installed.id);
-        if (catalogApp && catalogApp.version !== installed.version) {
+        if (!catalogApp) continue;
+
+        let latestVersion = catalogApp.version;
+        let latestDownloadUrl = catalogApp.downloadUrl;
+
+        // If app has githubRepo, fetch latest release from GitHub API
+        if (catalogApp.githubRepo) {
+            try {
+                const [owner, repo] = catalogApp.githubRepo.split('/');
+                const release = await window.electronAPI.fetchGitHubRelease({ owner, repo });
+
+                if (release && release.version) {
+                    latestVersion = release.version;
+                    latestDownloadUrl = release.downloadUrl || catalogApp.downloadUrl;
+
+                    // Update catalog app data with latest info
+                    catalogApp.version = latestVersion;
+                    catalogApp.downloadUrl = latestDownloadUrl;
+
+                    console.log(`GitHub Release for ${catalogApp.name}:`, latestVersion, latestDownloadUrl);
+                }
+            } catch (error) {
+                console.warn(`Failed to fetch GitHub release for ${catalogApp.name}:`, error);
+            }
+        }
+
+        // Compare versions
+        if (latestVersion !== installed.version) {
             appsWithUpdates.push({
                 name: catalogApp.name,
                 currentVersion: installed.version,
-                newVersion: catalogApp.version
+                newVersion: latestVersion
             });
         }
     }

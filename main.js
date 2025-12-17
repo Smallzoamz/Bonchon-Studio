@@ -401,6 +401,84 @@ ipcMain.handle('fetch-app-catalog', async (event, url) => {
     });
 });
 
+// Fetch GitHub release info for an app
+ipcMain.handle('fetch-github-release', async (event, { owner, repo }) => {
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: 'api.github.com',
+            path: `/repos/${owner}/${repo}/releases/latest`,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Bonchon-Launcher',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    if (res.statusCode === 200) {
+                        const release = JSON.parse(data);
+                        // Extract version from tag (remove 'v' prefix if exists)
+                        const version = release.tag_name.replace(/^v/, '');
+
+                        // Find portable ZIP or EXE asset
+                        let downloadUrl = '';
+                        let assetName = '';
+
+                        for (const asset of release.assets || []) {
+                            const name = asset.name.toLowerCase();
+                            // Prefer portable ZIP
+                            if (name.includes('portable') && name.endsWith('.zip')) {
+                                downloadUrl = asset.browser_download_url;
+                                assetName = asset.name;
+                                break;
+                            }
+                            // Fallback to any ZIP
+                            if (name.endsWith('.zip') && !downloadUrl) {
+                                downloadUrl = asset.browser_download_url;
+                                assetName = asset.name;
+                            }
+                            // Or EXE if no ZIP found
+                            if (name.endsWith('.exe') && !downloadUrl) {
+                                downloadUrl = asset.browser_download_url;
+                                assetName = asset.name;
+                            }
+                        }
+
+                        resolve({
+                            version,
+                            downloadUrl,
+                            assetName,
+                            publishedAt: release.published_at,
+                            releaseNotes: release.body || ''
+                        });
+                    } else if (res.statusCode === 404) {
+                        resolve(null); // No releases found
+                    } else {
+                        console.error('GitHub API error:', res.statusCode, data);
+                        resolve(null);
+                    }
+                } catch (e) {
+                    console.error('Parse GitHub release error:', e);
+                    resolve(null);
+                }
+            });
+        });
+
+        req.on('error', (err) => {
+            console.error('GitHub API request error:', err);
+            resolve(null); // Don't reject, just return null
+        });
+
+        req.end();
+    });
+});
+
 // Real download with progress
 async function performDownload(appId, downloadUrl, appName, originalFileName = null) {
     const settings = getSettingsSync();
