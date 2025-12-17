@@ -4,7 +4,7 @@
     "apps": [
         {
             "id": "medic-recruitment",
-            "name": "Medic OP Systems",
+            "name": "Medic OP Desktop",
             "description": "ระบบจัดการ OP และติดตามสถานะ Medic แบบ Real-time",
             "version": "1.0.0",
             "downloadUrl": "",
