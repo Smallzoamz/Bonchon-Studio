@@ -15,12 +15,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Settings
     getSettings: () => ipcRenderer.invoke('get-settings'),
     saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+    selectDirectory: () => ipcRenderer.invoke('select-directory'),
 
     // External links
     openExternal: (url) => ipcRenderer.send('open-external', url),
 
     // Force quit
     forceQuit: () => ipcRenderer.send('force-quit'),
+
+    // Hide to tray
+    hideToTray: () => ipcRenderer.send('hide-to-tray'),
+
+    // Open folder in Explorer
+    openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
 
     // Real download system
     downloadApp: (options) => ipcRenderer.invoke('download-app', options),

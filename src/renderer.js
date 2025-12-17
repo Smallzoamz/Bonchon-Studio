@@ -3,7 +3,7 @@
 // ========================================
 
 // App Catalog URL - Change this to your GitHub raw URL
-const APP_CATALOG_URL = 'https://raw.githubusercontent.com/YourUsername/bonchon-launcher-catalog/main/app-catalog.json';
+const APP_CATALOG_URL = 'https://raw.githubusercontent.com/Smallzoamz/bonchon-launcher-catalog/main/app-catalog.json';
 
 // App catalog data (loaded from API)
 let appsData = [];
@@ -72,6 +72,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderLibraryPage();
     updateSettingsDisplay();
 
+    // Check for updates on installed apps
+    await checkForAppUpdates();
+
     // Hide splash screen after a short delay
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
@@ -82,6 +85,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 1500);
 });
+
+// Check for updates on installed apps
+async function checkForAppUpdates() {
+    const appsWithUpdates = [];
+
+    for (const installed of installedApps) {
+        const catalogApp = appsData.find(a => a.id === installed.id);
+        if (catalogApp && catalogApp.version !== installed.version) {
+            appsWithUpdates.push({
+                name: catalogApp.name,
+                currentVersion: installed.version,
+                newVersion: catalogApp.version
+            });
+        }
+    }
+
+    if (appsWithUpdates.length > 0) {
+        const updateList = appsWithUpdates.map(app =>
+            `• ${app.name}: v${app.currentVersion} → v${app.newVersion}`
+        ).join('\n');
+
+        console.log('Updates available:', appsWithUpdates);
+
+        // Show notification after splash screen
+        setTimeout(() => {
+            showAlert(
+                'มีอัพเดทใหม่!',
+                `พบการอัพเดทสำหรับ ${appsWithUpdates.length} โปรแกรม:\n${updateList}\n\nไปที่ Library เพื่ออัพเดท`,
+                'info'
+            );
+        }, 2000);
+    }
+}
 
 // Load app catalog from GitHub
 async function loadAppCatalog() {
@@ -101,7 +137,7 @@ async function loadAppCatalog() {
 function initDownloadListeners() {
     // Real download progress from main process
     window.electronAPI.onDownloadProgress((data) => {
-        const { appId, progress, downloaded, total, speed, status } = data;
+        const { appId, progress, downloaded, total, speed, status, extractProgress, currentFile } = data;
 
         // Update modal
         const progressEl = document.getElementById('download-progress');
@@ -111,7 +147,18 @@ function initDownloadListeners() {
 
         if (progressEl) progressEl.style.width = `${progress}%`;
         if (percentEl) percentEl.textContent = `${progress}%`;
-        if (statusEl) statusEl.textContent = status === 'extracting' ? 'กำลังแตกไฟล์...' : 'กำลังดาวน์โหลด...';
+        if (statusEl) {
+            if (status === 'installing') {
+                statusEl.textContent = 'กำลังติดตั้ง...';
+            } else if (status === 'extracting') {
+                // Show extraction progress with current file
+                const fileName = currentFile ? currentFile.split('/').pop() : '';
+                const progressText = extractProgress ? ` (${extractProgress}%)` : '';
+                statusEl.textContent = `กำลังแตกไฟล์${progressText}${fileName ? ': ' + fileName : '...'}`;
+            } else {
+                statusEl.textContent = 'กำลังดาวน์โหลด...';
+            }
+        }
         if (speedEl && speed) speedEl.textContent = speed;
 
         // Update background widget
@@ -140,16 +187,26 @@ function initDownloadListeners() {
             await loadInstalledApps();
 
             // Update UI
-            document.getElementById('download-status').textContent = 'ติดตั้งเสร็จสมบูรณ์!';
+            const statusEl = document.getElementById('download-status');
+            if (statusEl) statusEl.textContent = 'ติดตั้งเสร็จสมบูรณ์!';
 
+            // Remove from queue and hide widget
             downloadQueue = downloadQueue.filter(d => d.id !== appId);
             isDownloading = false;
             updateBackgroundDownloadWidget();
 
+            // Hide background widget immediately
+            const widget = document.getElementById('bg-download-widget');
+            if (widget && downloadQueue.length === 0) {
+                widget.classList.add('hidden');
+            }
+
+            // Close modal and refresh UI (no auto-launch)
             setTimeout(() => {
                 document.getElementById('download-modal').classList.remove('active');
                 renderStorePage();
                 renderLibraryPage();
+                showAlert('ติดตั้งสำเร็จ', `${app.name} ติดตั้งเสร็จเรียบร้อยแล้ว`, 'info');
             }, 1000);
         }
     });
@@ -163,6 +220,23 @@ function initDownloadListeners() {
         isDownloading = false;
         updateBackgroundDownloadWidget();
         document.getElementById('download-modal').classList.remove('active');
+    });
+
+    // Handle download cancellation from main process
+    window.electronAPI.onDownloadCancelled((data) => {
+        const { appId } = data;
+        console.log('Download cancelled:', appId);
+
+        downloadQueue = downloadQueue.filter(d => d.id !== appId);
+        isDownloading = false;
+        updateBackgroundDownloadWidget();
+        document.getElementById('download-modal').classList.remove('active');
+
+        // Hide background widget if empty
+        const widget = document.getElementById('bg-download-widget');
+        if (widget && downloadQueue.length === 0) {
+            widget.classList.add('hidden');
+        }
     });
 }
 
@@ -358,29 +432,54 @@ function getLibraryButtons(app) {
     const hasUpdate = catalogApp && installedApp && catalogApp.version !== installedApp.version;
 
     return `
-        <div style="display: flex; gap: 8px;">
-            ${hasUpdate ? `
-                <button class="btn btn-primary btn-sm" onclick="updateApp('${app.id}')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
+        <div class="library-buttons">
+            <!-- Progress overlay (hidden by default) -->
+            <div class="card-progress-overlay" id="progress-${app.id}" style="display: none;">
+                <div class="circular-progress" id="circular-${app.id}">
+                    <svg viewBox="0 0 36 36">
+                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <path class="circle" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
                     </svg>
-                    Update
+                    <span class="progress-text">0%</span>
+                </div>
+            </div>
+            
+            <div class="button-row">
+                ${hasUpdate ? `
+                    <button class="btn btn-primary btn-sm" onclick="updateApp('${app.id}')" title="อัพเดท">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Update
+                    </button>
+                ` : ''}
+                <button class="btn btn-success btn-sm" onclick="launchApp('${app.id}')" title="เปิดโปรแกรม">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    Launch
                 </button>
-            ` : ''}
-            <button class="btn btn-success btn-sm" onclick="launchApp('${app.id}')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-                Launch
-            </button>
-            <button class="btn btn-danger btn-sm" onclick="uninstallApp('${app.id}')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-            </button>
+            </div>
+            <div class="button-row secondary">
+                <button class="btn btn-icon btn-sm" onclick="openAppFolder('${app.id}')" title="เปิดโฟลเดอร์">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </button>
+                <button class="btn btn-icon btn-sm" onclick="repairApp('${app.id}')" title="ซ่อมไฟล์">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                </button>
+                <button class="btn btn-icon btn-danger btn-sm" onclick="uninstallApp('${app.id}')" title="ถอนการติดตั้ง">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
+            </div>
         </div>
     `;
 }
@@ -497,13 +596,24 @@ async function downloadApp(appId) {
     }
 
     // Cancel button
-    document.getElementById('btn-cancel-download').onclick = () => {
+    document.getElementById('btn-cancel-download').onclick = async () => {
+        // Cancel simulated download if running
         if (currentDownloadInterval) clearInterval(currentDownloadInterval);
         currentDownloadInterval = null;
+
+        // Cancel real download in main process
+        await window.electronAPI.cancelDownload(app.id);
+
         modal.classList.remove('active');
         isDownloading = false;
         downloadQueue = downloadQueue.filter(d => d.id !== app.id);
         updateBackgroundDownloadWidget();
+
+        // Hide background widget if empty
+        const widget = document.getElementById('bg-download-widget');
+        if (widget && downloadQueue.length === 0) {
+            widget.classList.add('hidden');
+        }
     };
 
     // Minimize to background button
@@ -585,6 +695,39 @@ async function launchApp(appId) {
     }
 
     await window.electronAPI.launchApp(app.path);
+
+    // Hide launcher to system tray after launching app
+    setTimeout(() => {
+        window.electronAPI.hideToTray();
+    }, 500);
+}
+
+// Open app install folder in Explorer
+async function openAppFolder(appId) {
+    const settings = await window.electronAPI.getSettings();
+    const baseDownloadPath = settings.downloadPath || '';
+    const folderPath = `${baseDownloadPath}/${appId}`;
+    await window.electronAPI.openFolder(folderPath);
+}
+
+// Repair app (redownload and reinstall)
+async function repairApp(appId) {
+    const app = appsData.find(a => a.id === appId);
+    if (!app) {
+        await showAlert('ไม่พบข้อมูลโปรแกรม', 'ไม่พบโปรแกรมนี้ในรายการ', 'warning');
+        return;
+    }
+
+    const confirmed = await showConfirm(
+        'ซ่อมไฟล์โปรแกรม',
+        `ต้องการดาวน์โหลดและติดตั้ง "${app.name}" ใหม่หรือไม่?\n\nไฟล์เดิมจะถูกลบและแทนที่ด้วยไฟล์ใหม่`,
+        'info'
+    );
+
+    if (!confirmed) return;
+
+    // Redownload the app
+    await downloadApp(appId);
 }
 
 async function uninstallApp(appId) {
@@ -668,7 +811,13 @@ function updateSettingsDisplay() {
 
     // Settings button handlers
     document.getElementById('btn-change-path').addEventListener('click', async () => {
-        await showAlert('Coming Soon', 'ฟีเจอร์นี้จะมาในอัปเดตถัดไป', 'info');
+        const newPath = await window.electronAPI.selectDirectory();
+        if (newPath) {
+            settings.downloadPath = newPath;
+            await window.electronAPI.saveSettings(settings);
+            pathDisplay.textContent = newPath;
+            await showAlert('บันทึกสำเร็จ', `เปลี่ยนที่อยู่การติดตั้งเป็น:\n${newPath}`, 'info');
+        }
     });
 
     document.getElementById('btn-website').addEventListener('click', () => {
@@ -703,6 +852,8 @@ window.downloadApp = downloadApp;
 window.launchApp = launchApp;
 window.uninstallApp = uninstallApp;
 window.updateApp = updateApp;
+window.openAppFolder = openAppFolder;
+window.repairApp = repairApp;
 
 // ========================================
 // CUSTOM CONFIRM DIALOG
