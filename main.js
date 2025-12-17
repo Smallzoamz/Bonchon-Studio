@@ -374,6 +374,11 @@ const http = require('http');
 // Track active downloads for cancellation
 const activeDownloads = new Map(); // appId -> { request, cancelled }
 
+// Get current app version
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+});
+
 // App catalog URL (change this to your GitHub raw URL)
 const APP_CATALOG_URL = 'https://raw.githubusercontent.com/Smallzoamz/bonchon-launcher-catalog/main/app-catalog.json';
 

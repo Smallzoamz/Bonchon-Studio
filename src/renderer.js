@@ -34,17 +34,6 @@ const fallbackAppsData = [
         size: "82 MB",
         category: "Management",
         bgColor: "linear-gradient(135deg, #00d4ff 0%, #0099cc 50%, #006699 100%)"
-    },
-    {
-        id: "bonchon-tools",
-        name: "Bonchon Tools",
-        description: "ชุดเครื่องมือสำหรับนักพัฒนาจาก Bonchon Studio",
-        icon: "../assets/icons/logo.png",
-        version: "1.0.0",
-        downloadUrl: "",
-        size: "25 MB",
-        category: "Development",
-        bgColor: "linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #6d28d9 100%)"
     }
 ];
 
@@ -77,6 +66,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Check for updates on installed apps
     await checkForAppUpdates();
+
+    // Check for launcher updates
+    await checkLauncherUpdate();
 
     // Hide splash screen after a short delay
     setTimeout(() => {
@@ -923,6 +915,37 @@ function showConfirm(title, message, type = 'info') {
         btnOk.addEventListener('click', handleOk);
         btnCancel.addEventListener('click', handleCancel);
     });
+}
+
+// Check for launcher update
+async function checkLauncherUpdate() {
+    try {
+        const currentVersion = await window.electronAPI.getAppVersion();
+        const launcherRepo = 'Smallzoamz/Bonchon-Studio';
+
+        console.log(`Checking launcher update: Current v${currentVersion}`);
+
+        const [owner, repo] = launcherRepo.split('/');
+        const release = await window.electronAPI.fetchGitHubRelease({ owner, repo });
+
+        if (release && release.version) {
+            const latestVersion = release.version;
+            console.log(`Latest launcher version: v${latestVersion}`);
+
+            if (latestVersion !== currentVersion) {
+                showAlert(
+                    'Launcher อัพเดทใหม่!',
+                    `Bonchon Launcher เวอร์ชั่นใหม่ (v${latestVersion}) พร้อมใช้งานแล้ว\nคุณกำลังใช้เวอร์ชั่น v${currentVersion}\n\nกรุณาดาวน์โหลดเวอร์ชั่นใหม่เพื่อฟีเจอร์ที่ครบถ้วน`,
+                    'info',
+                    () => {
+                        window.electronAPI.openExternal('https://github.com/Smallzoamz/Bonchon-Studio/releases/latest');
+                    }
+                );
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to check launcher update:', error);
+    }
 }
 
 function showAlert(title, message, type = 'info') {

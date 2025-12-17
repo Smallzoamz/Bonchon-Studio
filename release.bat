@@ -79,6 +79,25 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo [4/4] Syncing to App Catalog Repository...
+set "catalog_repo=..\bonchon-launcher-catalog"
+if exist "%catalog_repo%" (
+    echo Copying app-catalog.json to %catalog_repo%...
+    copy /y "src\data\app-catalog.json" "%catalog_repo%\app-catalog.json"
+    
+    pushd "%catalog_repo%"
+    git add app-catalog.json
+    git commit -m "Update catalog: %msg%"
+    git push origin main
+    popd
+    echo Catalog sync complete!
+) else (
+    echo.
+    echo WARNING: Catalog repository not found at %catalog_repo%
+    echo Skipping catalog sync. Please sync manually if needed.
+)
+
+echo.
 echo ====================================================
 echo      SUCCESS! RELEASE %tag% TRIGGERED.
 echo ====================================================

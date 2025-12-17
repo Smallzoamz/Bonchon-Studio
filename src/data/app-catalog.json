@@ -25,21 +25,11 @@
             "size": "45 MB",
             "category": "Gaming",
             "bgColor": "linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff4500 100%)"
-        },
-        {
-            "id": "bonchon-tools",
-            "name": "Bonchon Tools",
-            "description": "ชุดเครื่องมือสำหรับนักพัฒนาจาก Bonchon Studio",
-            "version": "1.0.0",
-            "downloadUrl": "",
-            "icon": "",
-            "size": "25 MB",
-            "category": "Development",
-            "bgColor": "linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #6d28d9 100%)"
         }
     ],
     "launcher": {
         "version": "1.0.0",
-        "downloadUrl": ""
+        "downloadUrl": "https://github.com/Smallzoamz/Bonchon-Studio/releases/latest",
+        "githubRepo": "Smallzoamz/Bonchon-Studio"
     }
 }
