@@ -440,21 +440,24 @@ ipcMain.handle('fetch-github-release', async (event, { owner, repo }) => {
 
                         for (const asset of release.assets || []) {
                             const name = asset.name.toLowerCase();
-                            // Prefer portable ZIP
-                            if (name.includes('portable') && name.endsWith('.zip')) {
-                                downloadUrl = asset.browser_download_url;
-                                assetName = asset.name;
-                                break;
+                            // Prefer portable or direct ZIP
+                            if (name.endsWith('.zip')) {
+                                if (name.includes('portable') || name.includes('win-x64') || name.includes('win64')) {
+                                    downloadUrl = asset.browser_download_url;
+                                    assetName = asset.name;
+                                    break;
+                                }
+                                if (!downloadUrl) {
+                                    downloadUrl = asset.browser_download_url;
+                                    assetName = asset.name;
+                                }
                             }
-                            // Fallback to any ZIP
-                            if (name.endsWith('.zip') && !downloadUrl) {
-                                downloadUrl = asset.browser_download_url;
-                                assetName = asset.name;
-                            }
-                            // Or EXE if no ZIP found
+                            // Fallback to EXE (setup or standalone) if no ZIP found yet
                             if (name.endsWith('.exe') && !downloadUrl) {
-                                downloadUrl = asset.browser_download_url;
-                                assetName = asset.name;
+                                if (!name.includes('helper') && !name.includes('crash') && !name.includes('uninstall')) {
+                                    downloadUrl = asset.browser_download_url;
+                                    assetName = asset.name;
+                                }
                             }
                         }
 

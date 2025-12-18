@@ -864,7 +864,15 @@ async function updateApp(appId) {
     if (!confirmed) return;
 
     // Reuse download flow but it's an update
-    await downloadApp(appId);
+    if (app.downloadUrl) {
+        await downloadApp(appId);
+    } else {
+        await showAlert(
+            'ไม่พบลิงก์ดาวน์โหลด',
+            `ไม่พบไฟล์อัปเดตสำหรับเวอร์ชัน ${app.version}\nกรุณาลองใหม่อีกครั้งในภายหลัง หรือติดต่อผู้ดูแลระบบ`,
+            'warning'
+        );
+    }
 }
 
 // Make navigateTo global for onclick handlers
@@ -950,7 +958,8 @@ async function checkLauncherUpdate() {
     }
 }
 
-function showAlert(title, message, type = 'info') {
+// Show alert modal with optional callback
+function showAlert(title, message, type = 'info', callback = null) {
     return new Promise((resolve) => {
         const modal = document.getElementById('confirm-modal');
         const titleEl = document.getElementById('confirm-title');
@@ -977,6 +986,12 @@ function showAlert(title, message, type = 'info') {
             btnCancel.style.display = '';
             btnOk.textContent = 'ยืนยัน';
             btnOk.removeEventListener('click', handleOk);
+
+            // Execute callback if provided
+            if (typeof callback === 'function') {
+                callback();
+            }
+
             resolve();
         };
 
