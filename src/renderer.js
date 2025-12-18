@@ -57,6 +57,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSettings();
     await loadInstalledApps();
     await loadAppCatalog(); // Load apps from GitHub
+
+    // Sync all versions from GitHub before rendering
+    await syncAllAppVersions();
+
     initNavigation();
     initWindowControls();
     initDownloadListeners(); // Setup download event listeners
@@ -64,8 +68,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderLibraryPage();
     updateSettingsDisplay();
 
-    // Check for updates on installed apps
-    await checkForAppUpdates();
+    // Check for updates on installed apps (now uses already synced data)
+    checkForAppUpdates();
 
     // Check for launcher updates
     await checkLauncherUpdate();
@@ -81,44 +85,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 1500);
 });
 
-// Check for updates on installed apps
-async function checkForAppUpdates() {
+// Check for updates on installed apps (Syncs with already updated appsData)
+function checkForAppUpdates() {
     const appsWithUpdates = [];
 
     for (const installed of installedApps) {
         const catalogApp = appsData.find(a => a.id === installed.id);
         if (!catalogApp) continue;
 
-        let latestVersion = catalogApp.version;
-        let latestDownloadUrl = catalogApp.downloadUrl;
-
-        // If app has githubRepo, fetch latest release from GitHub API
-        if (catalogApp.githubRepo) {
-            try {
-                const [owner, repo] = catalogApp.githubRepo.split('/');
-                const release = await window.electronAPI.fetchGitHubRelease({ owner, repo });
-
-                if (release && release.version) {
-                    latestVersion = release.version;
-                    latestDownloadUrl = release.downloadUrl || catalogApp.downloadUrl;
-
-                    // Update catalog app data with latest info
-                    catalogApp.version = latestVersion;
-                    catalogApp.downloadUrl = latestDownloadUrl;
-
-                    console.log(`GitHub Release for ${catalogApp.name}:`, latestVersion, latestDownloadUrl);
-                }
-            } catch (error) {
-                console.warn(`Failed to fetch GitHub release for ${catalogApp.name}:`, error);
-            }
-        }
-
-        // Compare versions
-        if (latestVersion !== installed.version) {
+        // Compare current versions in catalog (which should already be synced from GitHub)
+        if (catalogApp.version !== installed.version) {
             appsWithUpdates.push({
                 name: catalogApp.name,
                 currentVersion: installed.version,
-                newVersion: latestVersion
+                newVersion: catalogApp.version
             });
         }
     }
@@ -139,6 +119,28 @@ async function checkForAppUpdates() {
             );
         }, 2000);
     }
+}
+
+// Sync all app versions from GitHub
+async function syncAllAppVersions() {
+    console.log('Syncing all app versions with GitHub...');
+    const syncPromises = appsData.map(async (app) => {
+        if (app.githubRepo) {
+            try {
+                const [owner, repo] = app.githubRepo.split('/');
+                const release = await window.electronAPI.fetchGitHubRelease({ owner, repo });
+                if (release && release.version) {
+                    app.version = release.version;
+                    app.downloadUrl = release.downloadUrl || app.downloadUrl;
+                    console.log(`Synced ${app.name} to v${app.version}`);
+                }
+            } catch (error) {
+                console.warn(`Failed to sync ${app.name}:`, error);
+            }
+        }
+    });
+
+    await Promise.all(syncPromises);
 }
 
 // Load app catalog from GitHub
@@ -173,10 +175,10 @@ function initDownloadListeners() {
             if (status === 'installing') {
                 statusEl.textContent = 'กำลังติดตั้ง...';
             } else if (status === 'extracting') {
-                // Show extraction progress with current file
-                const fileName = currentFile ? currentFile.split('/').pop() : '';
+                // Show extraction progress with more path segments
+                const fileName = currentFile || '';
                 const progressText = extractProgress ? ` (${extractProgress}%)` : '';
-                statusEl.textContent = `กำลังแตกไฟล์${progressText}${fileName ? ': ' + fileName : '...'}`;
+                statusEl.textContent = `กำลังแตกไฟล์${progressText}: ${fileName || '...'}`;
             } else {
                 statusEl.textContent = 'กำลังดาวน์โหลด...';
             }

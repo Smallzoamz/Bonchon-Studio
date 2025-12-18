@@ -1,6 +1,6 @@
 {
     "name":  "bonchon-launcher",
-    "version":  "1.0.2",
+    "version":  "1.0.3",
     "description":  "Bonchon Studio Application Launcher",
     "main":  "main.js",
     "scripts":  {

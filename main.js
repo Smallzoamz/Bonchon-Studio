@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 let mainWindow;
 let tray = null;
@@ -552,7 +555,10 @@ async function performDownload(appId, downloadUrl, appName, originalFileName = n
             response.pipe(file);
 
             file.on('finish', async () => {
-                file.close();
+                // Ensure the file is fully written and closed before proceeding
+                await new Promise((resolveClose) => {
+                    file.close(resolveClose);
+                });
 
                 // Check if download was cancelled
                 const downloadInfo = activeDownloads.get(appId);
@@ -582,26 +588,17 @@ async function performDownload(appId, downloadUrl, appName, originalFileName = n
                 const findMainExeAsync = async (dir, depth = 0) => {
                     if (depth > 5) return null;
                     try {
-                        // Check if directory exists
-                        await fs.promises.access(dir);
                         const files = await fs.promises.readdir(dir);
                         const exeFiles = [];
                         const subdirs = [];
 
                         for (const file of files) {
-                            // Yield to event loop periodically
-                            await new Promise(resolve => setImmediate(resolve));
-
-                            // Check if cancelled
-                            const dlCheck = activeDownloads.get(appId);
-                            if (dlCheck && dlCheck.cancelled) return null;
-
                             const fullPath = path.join(dir, file);
                             try {
                                 const stat = await fs.promises.stat(fullPath);
                                 if (stat.isDirectory()) {
                                     subdirs.push(fullPath);
-                                } else if (file.endsWith('.exe') &&
+                                } else if (file.toLowerCase().endsWith('.exe') &&
                                     !file.toLowerCase().includes('uninstall') &&
                                     !file.toLowerCase().includes('uninst') &&
                                     !file.toLowerCase().includes('update') &&
@@ -612,12 +609,7 @@ async function performDownload(appId, downloadUrl, appName, originalFileName = n
                             } catch (e) { }
                         }
 
-                        // Return first valid exe found at current level
-                        if (exeFiles.length > 0) {
-                            return exeFiles[0];
-                        }
-
-                        // Search subdirectories
+                        if (exeFiles.length > 0) return exeFiles[0];
                         for (const subdir of subdirs) {
                             const found = await findMainExeAsync(subdir, depth + 1);
                             if (found) return found;
@@ -628,166 +620,126 @@ async function performDownload(appId, downloadUrl, appName, originalFileName = n
 
                 // Extract ZIP file (like Epic Games Store)
                 if (filePath.endsWith('.zip')) {
+                    const extractPath = path.join(appPath, '_temp_extract');
                     try {
-                        console.log('Extracting ZIP:', filePath);
-                        console.log('Extract to:', appPath);
+                        console.log('--- Native Extraction Started ---');
 
-                        // Send extracting status
+                        // 1. Process Killer: Ensure no old version is running
                         if (mainWindow && !mainWindow.isDestroyed()) {
                             mainWindow.webContents.send('download-progress', {
-                                appId,
-                                progress: 100,
-                                status: 'extracting'
+                                appId, progress: 100, status: 'installing',
+                                currentFile: 'กำลังตรวจสอบและปิดโปรแกรมที่ทำงานอยู่...', extractProgress: 5
                             });
                         }
 
-                        // Check cancellation before extraction
-                        const downloadCheck = activeDownloads.get(appId);
-                        if (downloadCheck && downloadCheck.cancelled) {
-                            console.log('Download cancelled before extraction');
-                            try { await fs.promises.unlink(filePath); } catch (e) { }
-                            activeDownloads.delete(appId);
-                            resolve({ success: false, cancelled: true });
-                            return;
+                        // Try to kill potential processes (common names)
+                        const possibleNames = [appName, appId, 'Medical-OP', 'Medic'];
+                        for (const name of possibleNames) {
+                            try { await execPromise(`taskkill /F /IM "${name}*" /T`); } catch (e) { }
                         }
 
-                        // Use PowerShell to extract ZIP (non-blocking child process)
-                        const { spawn } = require('child_process');
-
-                        const extractWithPowerShell = () => {
-                            return new Promise((resolveExtract, rejectExtract) => {
-                                const psCommand = `Expand-Archive -Path "${filePath}" -DestinationPath "${appPath}" -Force`;
-                                console.log('Running PowerShell:', psCommand);
-
-                                const ps = spawn('powershell.exe', ['-NoProfile', '-Command', psCommand], {
-                                    windowsHide: true
-                                });
-
-                                // Store process for cancellation
-                                const dlInfo = activeDownloads.get(appId);
-                                if (dlInfo) dlInfo.extractProcess = ps;
-
-                                let errorOutput = '';
-
-                                ps.stderr.on('data', (data) => {
-                                    errorOutput += data.toString();
-                                    console.log('PowerShell stderr:', data.toString());
-                                });
-
-                                ps.stdout.on('data', (data) => {
-                                    console.log('PowerShell stdout:', data.toString());
-                                });
-
-                                ps.on('close', (code) => {
-                                    console.log('PowerShell exited with code:', code);
-                                    if (code === 0) {
-                                        resolveExtract();
-                                    } else {
-                                        rejectExtract(new Error(`Extraction failed with code ${code}: ${errorOutput}`));
-                                    }
-                                });
-
-                                ps.on('error', (err) => {
-                                    console.error('PowerShell error:', err);
-                                    rejectExtract(err);
-                                });
-                            });
-                        };
-
-                        // Start extraction progress animation
-                        let extractProgress = 0;
+                        // 2. Start simulated progress
+                        let simulatedProgress = 10;
                         const progressInterval = setInterval(() => {
-                            // Check cancellation
-                            const dlCheck = activeDownloads.get(appId);
-                            if (dlCheck && dlCheck.cancelled) {
-                                clearInterval(progressInterval);
-                                if (dlCheck.extractProcess) {
-                                    dlCheck.extractProcess.kill();
-                                }
-                                return;
-                            }
-
-                            // Animate progress (slower as it approaches 95%)
-                            if (extractProgress < 95) {
-                                extractProgress += Math.max(1, (95 - extractProgress) * 0.1);
-                            }
-
+                            if (simulatedProgress < 95) simulatedProgress += (95 - simulatedProgress) * 0.05;
                             if (mainWindow && !mainWindow.isDestroyed()) {
                                 mainWindow.webContents.send('download-progress', {
-                                    appId,
-                                    progress: 100,
-                                    status: 'extracting',
-                                    extractProgress: Math.round(extractProgress)
+                                    appId, progress: 100, status: 'installing',
+                                    extractProgress: Math.round(simulatedProgress)
                                 });
                             }
                         }, 500);
 
-                        await extractWithPowerShell();
-                        clearInterval(progressInterval);
-
-                        console.log('Extraction complete!');
-
-                        // Check cancellation after extraction
-                        const postExtractCheck = activeDownloads.get(appId);
-                        if (postExtractCheck && postExtractCheck.cancelled) {
-                            console.log('Download cancelled after extraction');
-                            activeDownloads.delete(appId);
-                            resolve({ success: false, cancelled: true });
-                            return;
+                        // 3. Prepare temp path
+                        if (fs.existsSync(extractPath)) {
+                            try { fs.rmSync(extractPath, { recursive: true, force: true }); } catch (e) { }
                         }
+                        fs.mkdirSync(extractPath, { recursive: true });
 
-                        // Remove ZIP after extract
-                        try {
-                            await fs.promises.unlink(filePath);
-                            console.log('Removed ZIP file');
-                        } catch (e) { }
-
-                        // Find main executable (async)
+                        // 4. Native Tar Extraction (Much faster than JS)
+                        console.log('Running native tar extraction...');
                         if (mainWindow && !mainWindow.isDestroyed()) {
                             mainWindow.webContents.send('download-progress', {
-                                appId,
-                                progress: 100,
-                                status: 'installing'
+                                appId, progress: 100, status: 'installing',
+                                currentFile: 'กำลังแตกไฟล์ความเร็วสูง (Native)...', extractProgress: 30
                             });
                         }
 
-                        const mainExe = await findMainExeAsync(appPath);
-                        if (mainExe) {
-                            finalInstallPath = mainExe;
-                            console.log('Found main exe:', mainExe);
-                        } else {
-                            console.log('No exe found in extracted files');
+                        // Windows tar command (-xf = extract file, -C = change directory)
+                        await execPromise(`tar -xf "${filePath}" -C "${extractPath}"`);
+
+                        clearInterval(progressInterval);
+                        console.log('Native extraction successful');
+
+                        // 5. Final organizing state
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('download-progress', {
+                                appId, progress: 100, status: 'installing',
+                                currentFile: 'กำลังจัดระเบียบไฟล์และล้างข้อมูลเก่า...', extractProgress: 95
+                            });
                         }
+
+                        // Cleaning up target folder
+                        console.log('Cleaning up target folder:', appPath);
+                        const contents = await fs.promises.readdir(appPath);
+                        for (const item of contents) {
+                            if (item !== fileName && item !== '_temp_extract') {
+                                try {
+                                    await fs.promises.rm(path.join(appPath, item), { recursive: true, force: true });
+                                } catch (e) {
+                                    console.warn(`Could not delete ${item}:`, e.message);
+                                }
+                            }
+                        }
+
+                        // Move items with fallback
+                        console.log('Finalizing installation...');
+                        const extractedItems = await fs.promises.readdir(extractPath);
+                        for (const item of extractedItems) {
+                            const src = path.join(extractPath, item);
+                            const dest = path.join(appPath, item);
+                            try {
+                                await fs.promises.rename(src, dest);
+                            } catch (e) {
+                                // Rename might fail if busy, try copy fallback
+                                try {
+                                    const stat = await fs.promises.stat(src);
+                                    if (stat.isDirectory()) {
+                                        await fs.promises.cp(src, dest, { recursive: true });
+                                    } else {
+                                        await fs.promises.copyFile(src, dest);
+                                    }
+                                } catch (err) {
+                                    console.error(`Installation error for ${item}:`, err.message);
+                                    throw new Error(`ไม่สามารถเขียนไฟล์ ${item} ได้ (อาจถูกโปรแกรมอื่นเปิดค้างไว้)`);
+                                }
+                            }
+                        }
+
+                        // Cleanup temp and ZIP
+                        try {
+                            await fs.promises.rm(extractPath, { recursive: true, force: true });
+                            await fs.promises.unlink(filePath);
+                        } catch (e) { }
+
+                        const mainExe = await findMainExeAsync(appPath);
+                        if (mainExe) finalInstallPath = mainExe;
                     } catch (extractError) {
                         console.error('Extract error:', extractError);
-                        activeDownloads.delete(appId);
                         if (mainWindow && !mainWindow.isDestroyed()) {
-                            mainWindow.webContents.send('download-error', {
-                                appId,
-                                error: 'การแตกไฟล์ล้มเหลว: ' + extractError.message
-                            });
+                            mainWindow.webContents.send('download-error', { appId, error: 'การติดตั้งล้มเหลว: ' + extractError.message });
                         }
                         reject(extractError);
                         return;
                     }
-                }
-                // EXE file - treat as portable app (ready to use)
-                else if (filePath.endsWith('.exe')) {
-                    // This is a portable EXE, just use it directly
+                } else if (filePath.endsWith('.exe')) {
                     finalInstallPath = filePath;
-                    console.log('Portable EXE ready:', filePath);
                 }
 
-                // Clean up active downloads tracking
                 activeDownloads.delete(appId);
-
                 if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('download-complete', {
-                        appId,
-                        installPath: finalInstallPath
-                    });
+                    mainWindow.webContents.send('download-complete', { appId, installPath: finalInstallPath });
                 }
-
                 resolve({ success: true, installPath: finalInstallPath });
             });
         });

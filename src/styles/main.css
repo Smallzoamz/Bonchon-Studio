@@ -760,7 +760,7 @@ body {
 
 /* Download Modal */
 .download-modal-content {
-    width: 400px;
+    width: 550px;
     padding: 24px;
 }
 
@@ -787,6 +787,10 @@ body {
 .download-info p {
     font-size: 13px;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 450px;
 }
 
 /* Progress Bar */
